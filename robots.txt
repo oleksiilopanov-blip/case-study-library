@@ -1,0 +1,3 @@
+# Internal library - not for indexing.
+User-agent: *
+Disallow: /

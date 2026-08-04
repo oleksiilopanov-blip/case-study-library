@@ -1,0 +1,5 @@
+# Everything here installs from pre-built wheels — no compilers, no system
+# packages. That is what lets the Cloudflare Pages runner build the site.
+pdfplumber>=0.11,<0.12
+pillow>=11,<14
+pypdfium2>=4,<6

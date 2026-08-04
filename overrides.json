@@ -1,0 +1,34 @@
+{
+  "_readme": [
+    "Manual corrections. Key = the PDF filename (preferred) or the auto slug.",
+    "Any field you set here wins over what was auto-extracted from the PDF.",
+    "Editable fields: title, client, industries, services, tech, aws,",
+    "description, year, hidden (true removes the card from the library),",
+    "internal (true shows an INTERNAL ONLY badge and adds a Sharing filter).",
+    "Re-run  python3 build.py  after editing this file.",
+    "NOTE: internal:true is set on B2Buster below only so you can see what",
+    "the badge looks like. Move it to whichever case studies are under NDA."
+  ],
+
+  "a6703bd6-cubitwebplatformpdfcompressed.pdf": {
+    "client": "Cubit Insurance",
+    "industries": ["Insurance", "Transportation & Mobility", "Logistics & Supply Chain"]
+  },
+  "d790f2d1-dmipdfcompressed.pdf": {
+    "client": "DMI",
+    "industries": ["Logistics & Supply Chain", "Manufacturing"]
+  },
+  "f09d92f5-filedbeepdfcompressed.pdf": {
+    "client": "FieldBee",
+    "industries": ["Agriculture"]
+  },
+  "e17b27b7-beelinepdfcompressed.pdf": {
+    "client": "Beeline Professional",
+    "industries": ["HR & Workforce"]
+  },
+  "c2be16df-b2busterpdfcompressed.pdf": {
+    "client": "B2Buster",
+    "industries": ["Sales & Marketing"],
+    "internal": true
+  }
+}
