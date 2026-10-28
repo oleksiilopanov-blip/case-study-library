@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Build the Euristiq case-study web library.
+Build the Euristiq case-study library.
 
-    python3 build.py                 # folder build  -> out/index.html + out/pdfs/
-    python3 build.py --embed         # single-file build -> out/library-standalone.html
-    python3 build.py --src PDdir     # where the source PDFs live (default: pdfs)
+    python3 build.py --out dist      # site folder: index.html, pdfs/, img/
+    python3 build.py --embed         # one self-contained HTML file (no previews
+                                     # at full size; PDFs inlined) for Slack/email
 
-The folder build works by double-click from a local disk AND uploads unchanged
-to a web server. The --embed build inlines every PDF as base64 so the whole
-library is one shareable file.
+Everything shown on the site is read from the live text of the PDFs in pdfs/.
+overrides.json holds the few things a PDF can't say about itself: the client
+name for each filename, tag spelling fixes, and per-file corrections.
 """
 import argparse
 import base64
@@ -17,178 +17,210 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from extract import parse_pdf, nice_name, apply_overrides  # noqa: E402
-
 HERE = os.path.dirname(os.path.abspath(__file__))
-THUMB_W = 420
-THUMB_Q = 72
+sys.path.insert(0, HERE)
+from extract import parse_pdf, client_from_filename  # noqa: E402
+
+CARD_W = 720      # px, card thumbnail (shown ~360px wide, so 2x)
+FULL_W = 1600     # px, preview image
+# The card shows the right-hand visual of the one-pager (client logo bar +
+# product image), in PDF points on the 1920x1080 template.
+CARD_CROP = (1035, 160, 1835, 833)
 
 
-def _encode_thumb(im):
-    """Crop to 16:9 off the top of the page, downscale, return a data URI."""
-    from PIL import Image
-    im = im.convert("RGB")
-    w, h = im.size
-    # The title and tag chips live at the top, so a top crop stays legible small.
-    crop_h = min(h, int(w * 9 / 16))
-    im = im.crop((0, 0, w, crop_h))
-    if w != THUMB_W:
-        im = im.resize((THUMB_W, max(1, int(THUMB_W * crop_h / w))), Image.LANCZOS)
-    buf = io.BytesIO()
-    im.save(buf, "JPEG", quality=THUMB_Q, optimize=True, progressive=True)
-    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+# ---------------------------------------------------------------- images
 
-
-def make_thumb(pdf_path):
-    """Render page 1 to a small base64 JPEG data URI (None if unavailable).
-
-    Prefers pypdfium2 — a pure wheel with no system dependencies, so this
-    works unchanged on a hosted build runner where poppler isn't installed.
-    Falls back to poppler's pdftoppm if pypdfium2 isn't present.
-    """
+def render_pages(pdf_path):
+    """Return a PIL image of page 1, or None."""
     try:
         import pypdfium2 as pdfium
+    except ImportError:
+        return None
+    try:
         doc = pdfium.PdfDocument(pdf_path)
         try:
             page = doc[0]
-            width = page.get_size()[0]
-            im = page.render(scale=THUMB_W / width).to_pil()
-            return _encode_thumb(im)
+            return page.render(scale=FULL_W / page.get_size()[0]).to_pil().convert("RGB")
         finally:
             doc.close()
-    except ImportError:
-        pass
     except Exception:
         return None
 
-    try:
-        from PIL import Image
-        out = subprocess.run(
-            ["pdftoppm", "-r", "50", "-png", "-f", "1", "-l", "1",
-             "-singlefile", pdf_path, "/tmp/_thumb"],
-            capture_output=True, timeout=60)
-        if out.returncode != 0 or not os.path.exists("/tmp/_thumb.png"):
-            return None
-        return _encode_thumb(Image.open("/tmp/_thumb.png"))
-    except Exception:
-        return None
-    finally:
-        if os.path.exists("/tmp/_thumb.png"):
-            os.remove("/tmp/_thumb.png")
+
+def card_crop(im):
+    """Cut the product visual out of a page render; whole page if the page
+    isn't the 1920x1080 template."""
+    k = im.width / 1920
+    if abs(im.height / k - 1080) > 2:
+        return im
+    return im.crop(tuple(round(v * k) for v in CARD_CROP))
 
 
-def safe_filename(rec):
-    """Presentable download filename: 'Client - Title.pdf'."""
-    title, client = rec.get("title", ""), rec["client"]
-    # Prefix the client only when the title doesn't already name them, so we
-    # never ship "DMI - Digital Twin ... for DMI.pdf".
-    if not title:
-        base = client
-    elif client.lower() in title.lower():
+def jpeg(im, width, quality):
+    from PIL import Image
+    if im.width != width:
+        im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- overrides
+
+OVERRIDABLE = ("title", "client", "description", "tags", "industries",
+               "locations", "hidden", "internal")
+
+
+def load_overrides(path):
+    if not os.path.exists(path):
+        return {}, {}, {}, {}
+    with open(path, encoding="utf-8") as fh:
+        ov = json.load(fh)
+    files = dict(ov.get("files", {}))
+    # Older format: per-file entries at the top level, keyed by filename.
+    files.update({k: v for k, v in ov.items() if k.lower().endswith(".pdf")})
+    return (ov.get("clients", {}), ov.get("tag_aliases", {}),
+            ov.get("industry_aliases", {}), files)
+
+
+def alias(values, table):
+    """Apply spelling fixes, case-insensitively, and drop duplicates."""
+    low = {k.lower(): v for k, v in table.items()}
+    out, seen = [], set()
+    for v in values:
+        v = low.get(v.lower(), v)
+        if v.lower() not in seen:
+            seen.add(v.lower())
+            out.append(v)
+    return out
+
+
+def download_name(rec):
+    """'Client - Title.pdf', without repeating the client if the title has it."""
+    title, client = rec["title"], rec["client"]
+    if rec.get("confidential") or client.lower() in title.lower():
         base = title
     else:
         base = f"{client} - {title}"
-    base = re.sub(r'[\\/:*?"<>|]+', "", base).strip()
-    base = re.sub(r"\s+", " ", base)[:110].rstrip(" .")
-    return base + ".pdf"
+    base = re.sub(r'[\\/:*?"<>|]+', "", base)
+    base = re.sub(r"\s+", " ", base).strip(" .")[:120]
+    return f"Euristiq case study - {base}.pdf"
 
+
+# ---------------------------------------------------------------- main
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=os.path.join(HERE, "pdfs"))
-    ap.add_argument("--out", default=os.path.join(HERE, "out"))
-    ap.add_argument("--embed", action="store_true",
-                    help="inline the PDFs into one standalone HTML file")
-    ap.add_argument("--title", default="Euristiq — Case Study Library")
-    ap.add_argument("--no-thumbs", action="store_true")
+    ap.add_argument("--out", default=os.path.join(HERE, "dist"))
+    ap.add_argument("--embed", action="store_true")
+    ap.add_argument("--title", default="Case Study Library · Euristiq")
+    ap.add_argument("--no-images", action="store_true")
     args = ap.parse_args()
 
     pdfs = sorted(f for f in os.listdir(args.src) if f.lower().endswith(".pdf"))
     if not pdfs:
         sys.exit(f"No PDFs found in {args.src}")
 
-    print(f"Parsing {len(pdfs)} PDFs from {args.src}\n" + "-" * 68)
+    clients, tag_alias, ind_alias, file_ov = load_overrides(
+        os.path.join(HERE, "overrides.json"))
+
+    print(f"Reading {len(pdfs)} PDFs from {args.src}\n" + "-" * 72)
     records, problems = [], []
     for f in pdfs:
         path = os.path.join(args.src, f)
         rec = parse_pdf(path)
         rec["file"] = f
-        rec["client"] = nice_name(f)
-        rec["slug"] = re.sub(r"[^a-z0-9]+", "-", rec["client"].lower()).strip("-")
+        rec["slug"] = re.sub(r"[^a-z0-9]+", "-", os.path.splitext(f)[0].lower()).strip("-")
+        rec["client"] = client_from_filename(f, clients)
+        rec["confidential"] = f.lower().startswith("confidential")
+        for field, value in file_ov.get(f, {}).items():
+            if field in OVERRIDABLE:
+                rec[field] = value
+        rec["tags"] = alias(rec.get("tags", []), tag_alias)
+        rec["industries"] = alias(rec.get("industries", []), ind_alias)
+        rec["title"] = rec.get("title") or rec["client"]
         rec["size_bytes"] = os.path.getsize(path)
-        if not rec.get("title"):
-            rec["title"] = rec["client"]
         records.append(rec)
-        if rec["warnings"]:
-            problems.append((f, rec["warnings"]))
-        print(f"  {f[:40]:40} {len(rec.get('services',[])):2}svc "
-              f"{len(rec.get('tech',[])):2}tech {len(rec.get('aws',[])):2}cloud "
-              f"{len(rec.get('outcomes',[])):2}out"
-              + ("   !! " + "; ".join(rec["warnings"]) if rec["warnings"] else ""))
+        warn = rec.get("warnings", [])
+        if warn:
+            problems.append((f, warn))
+        print(f"  {f[:44]:44} {len(rec.get('tags', [])):2} tags "
+              f"{len(rec.get('outcomes', [])):2} outcomes  {rec['client']}"
+              + ("   !! " + "; ".join(warn) if warn else ""))
 
-    n = apply_overrides(records, os.path.join(HERE, "overrides.json"))
-    if n:
-        print(f"\n  overrides.json: applied {n} manual corrections")
     records = [r for r in records if not r.get("hidden")]
     records.sort(key=lambda r: r["title"].lower())
 
-    # ---------------------------------------------------------- assemble
+    # ---------------------------------------------------------- write
     os.makedirs(args.out, exist_ok=True)
-    pdf_out = os.path.join(args.out, "pdfs")
     if not args.embed:
-        # Rebuild from scratch so renamed or removed case studies don't linger.
-        if os.path.isdir(pdf_out):
-            shutil.rmtree(pdf_out)
-        os.makedirs(pdf_out, exist_ok=True)
+        for sub in ("pdfs", "img"):
+            p = os.path.join(args.out, sub)
+            if os.path.isdir(p):
+                shutil.rmtree(p)      # removed case studies must not linger
+            os.makedirs(p, exist_ok=True)
 
-    used, payload = set(), []
+    payload = []
     for rec in records:
         src = os.path.join(args.src, rec["file"])
-        dl = safe_filename(rec)
-
-        # stable, collision-free on-disk name
-        name = re.sub(r"[^a-z0-9]+", "-", os.path.splitext(dl)[0].lower()).strip("-")
-        cand, k = name + ".pdf", 2
-        while cand in used:
-            cand, k = f"{name}-{k}.pdf", k + 1
-        used.add(cand)
-
         item = {
-            "title": rec["title"], "client": rec["client"],
-            "services": rec.get("services", []), "industries": rec.get("industries", []),
-            "tech": rec.get("tech", []), "aws": rec.get("aws", []),
+            "id": rec["slug"],
+            "title": rec["title"],
+            "client": rec["client"],
+            "confidential": rec["confidential"],
+            "internal": bool(rec.get("internal")),
             "description": rec.get("description", ""),
+            "tags": rec.get("tags", []),
+            "industries": rec.get("industries", []),
+            "locations": rec.get("locations", []),
+            "highlights": rec.get("highlights", []),
             "outcomes": rec.get("outcomes", []),
             "raw": rec.get("raw_text", ""),
-            "internal": bool(rec.get("internal")),
-            "flags": ["Internal only"] if rec.get("internal") else ["Shareable externally"],
-            "pages": rec.get("pages", 1), "bytes": rec["size_bytes"],
-            "file": rec["file"], "dl": dl,
-            "thumb": None if args.no_thumbs else make_thumb(src),
+            "bytes": rec["size_bytes"],
+            "dl": download_name(rec),
+            "thumb": None, "full": None, "href": "",
         }
+        im = None if args.no_images else render_pages(src)
         if args.embed:
+            if im is not None:
+                item["thumb"] = "data:image/jpeg;base64," + base64.b64encode(
+                    jpeg(card_crop(im), CARD_W // 2, 72)).decode()
+                item["full"] = "data:image/jpeg;base64," + base64.b64encode(
+                    jpeg(im, 1200, 72)).decode()
             with open(src, "rb") as fh:
                 item["data"] = base64.b64encode(fh.read()).decode()
-            item["href"] = ""
         else:
-            shutil.copy2(src, os.path.join(pdf_out, cand))
-            item["href"] = "pdfs/" + cand
+            shutil.copy2(src, os.path.join(args.out, "pdfs", rec["slug"] + ".pdf"))
+            item["href"] = f"pdfs/{rec['slug']}.pdf"
+            if im is not None:
+                for kind, src_im, w, q in (("card", card_crop(im), CARD_W, 78),
+                                           ("full", im, FULL_W, 82)):
+                    name = f"img/{rec['slug']}-{kind}.jpg"
+                    with open(os.path.join(args.out, name), "wb") as fh:
+                        fh.write(jpeg(src_im, w, q))
+                    item["thumb" if kind == "card" else "full"] = name
         payload.append(item)
 
     with open(os.path.join(HERE, "template.html"), encoding="utf-8") as fh:
         html = fh.read()
+    def asset(name):
+        with open(os.path.join(HERE, "assets", name), encoding="utf-8") as fh:
+            return fh.read()
+
+    logo = re.sub(r"<svg ", '<svg class="logo" role="img" aria-label="Euristiq" ',
+                  asset("logo-wordmark-white.svg"), count=1)
+    icons = re.sub(r"<!--.*?-->", "", asset("icons.svg"), flags=re.S)
 
     data_js = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     data_js = data_js.replace("</", "<\\/")          # never break out of <script>
-    cfg = json.dumps({"embedded": bool(args.embed)})
-
-    html = (html.replace("__PAGE_TITLE__", args.title)
+    html = (html.replace("__LOGO__", logo)
+                .replace("__ICONS__", icons)
+                .replace("__PAGE_TITLE__", args.title)
                 .replace("__DATA__", data_js)
-                .replace("__CFG__", cfg))
+                .replace("__CFG__", json.dumps({"embedded": args.embed})))
 
     name = "library-standalone.html" if args.embed else "index.html"
     dest = os.path.join(args.out, name)
@@ -196,17 +228,14 @@ def main():
         fh.write(html)
 
     if not args.embed:
-        # Machine-readable copy so admin.html can reopen the library later.
-        meta = [{k: v for k, v in item.items() if k != "data"} for item in payload]
+        meta = [{k: v for k, v in it.items() if k not in ("data", "raw")} for it in payload]
         with open(os.path.join(args.out, "library.json"), "w", encoding="utf-8") as fh:
             json.dump(meta, fh, ensure_ascii=False, indent=1)
-
-        # Static extras + Pages Functions. Cloudflare reads functions/ from the
-        # build output directory, so copy it there rather than relying on root.
         for extra in ("_headers", "robots.txt"):
-            src = os.path.join(HERE, extra)
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(args.out, extra))
+            if os.path.exists(os.path.join(HERE, extra)):
+                shutil.copy2(os.path.join(HERE, extra), os.path.join(args.out, extra))
+        # Cloudflare Pages reads functions/ from the project root. Copying it
+        # into the output too covers projects whose root is set to dist/.
         fn_src = os.path.join(HERE, "functions")
         if os.path.isdir(fn_src):
             fn_dst = os.path.join(args.out, "functions")
@@ -216,18 +245,18 @@ def main():
             print(f"  copied functions/ -> {fn_dst}")
 
     # ---------------------------------------------------------- report
-    size = os.path.getsize(dest)
-    print("-" * 68)
-    print(f"  {len(payload)} case studies")
-    print(f"  {dest}  ({size/1048576:.2f} MB)")
-    if not args.embed:
-        tot = sum(os.path.getsize(os.path.join(pdf_out, f)) for f in os.listdir(pdf_out))
-        print(f"  {pdf_out}/  ({tot/1048576:.1f} MB, {len(os.listdir(pdf_out))} files)")
-    facets = {k: len({v for r in payload for v in r[k]})
-              for k in ("services", "industries", "tech", "aws")}
-    print(f"  facets: " + ", ".join(f"{v} {k}" for k, v in facets.items()))
+    print("-" * 72)
+    print(f"  {len(payload)} case studies -> {dest} "
+          f"({os.path.getsize(dest) / 1048576:.2f} MB)")
+    facets = {
+        "clients": {p["client"] for p in payload},
+        "industries": {v for p in payload for v in p["industries"]},
+        "tags": {v for p in payload for v in p["tags"]},
+        "locations": {v for p in payload for v in p["locations"]},
+    }
+    print("  filters: " + ", ".join(f"{len(v)} {k}" for k, v in facets.items()))
     if problems:
-        print("\n  NEEDS A LOOK:")
+        print("\n  NEEDS A LOOK (the site still builds):")
         for f, w in problems:
             print(f"    {f}: {'; '.join(w)}")
     print()

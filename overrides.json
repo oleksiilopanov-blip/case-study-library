@@ -1,34 +1,58 @@
 {
   "_readme": [
-    "Manual corrections. Key = the PDF filename (preferred) or the auto slug.",
-    "Any field you set here wins over what was auto-extracted from the PDF.",
-    "Editable fields: title, client, industries, services, tech, aws,",
-    "description, year, hidden (true removes the card from the library),",
-    "internal (true shows an INTERNAL ONLY badge and adds a Sharing filter).",
-    "Re-run  python3 build.py  after editing this file.",
-    "NOTE: internal:true is set on B2Buster below only so you can see what",
-    "the badge looks like. Move it to whichever case studies are under NDA."
+    "The few things a PDF can't tell the site about itself. Everything else",
+    "(title, description, tags, outcomes, domain, location, highlights) is read",
+    "from the PDF's own text on every build.",
+    "",
+    "clients          filename prefix -> client name shown on the site and used",
+    "                 as the Client filter. The longest matching prefix wins.",
+    "                 Files starting with 'confidential' are NDA cases.",
+    "tag_aliases      spelling in a PDF -> spelling on the site, so one tag",
+    "                 never shows up twice in the filters.",
+    "industry_aliases same, for the Domain / Industry values.",
+    "files            per-file corrections, keyed by the PDF filename.",
+    "                 Fields: title, client, description, tags, industries,",
+    "                 locations, hidden (true = leave off the site),",
+    "                 internal (true = INTERNAL ONLY badge)."
   ],
 
-  "a6703bd6-cubitwebplatformpdfcompressed.pdf": {
-    "client": "Cubit Insurance",
-    "industries": ["Insurance", "Transportation & Mobility", "Logistics & Supply Chain"]
+  "clients": {
+    "b2buster": "B2Buster",
+    "beeline": "Beeline",
+    "confidential": "Confidential (NDA)",
+    "corpay": "Corpay",
+    "cubit-insurance": "Cubit Insurance",
+    "drizzle": "Drizzle",
+    "finch": "Finch",
+    "fundre": "FundRe",
+    "heart-zones-inc": "Heart Zones",
+    "iriss": "IRISS",
+    "kloudville": "Kloudville",
+    "l-b-altimeters": "L&B Altimeters",
+    "metricaid": "MetricAid",
+    "midy-by-norton": "Norton (Gen Digital)",
+    "mozaiik": "Mozaiik",
+    "novalume": "Novalume",
+    "octopus": "Octopus Group",
+    "philips": "Philips",
+    "rodan-energy": "Rodan Energy",
+    "ryanair": "Ryanair",
+    "sitowise": "Sitowise",
+    "tektelic": "Tektelic",
+    "vamest": "Vamest",
+    "york-university": "York University"
   },
-  "d790f2d1-dmipdfcompressed.pdf": {
-    "client": "DMI",
-    "industries": ["Logistics & Supply Chain", "Manufacturing"]
+
+  "tag_aliases": {
+    "UI/UX design": "UX/UI design",
+    "Real time asset traking": "Real-time asset tracking",
+    "Real time asset tracking": "Real-time asset tracking"
   },
-  "f09d92f5-filedbeepdfcompressed.pdf": {
-    "client": "FieldBee",
-    "industries": ["Agriculture"]
+
+  "industry_aliases": {
+    "Real estate": "Real Estate"
   },
-  "e17b27b7-beelinepdfcompressed.pdf": {
-    "client": "Beeline Professional",
-    "industries": ["HR & Workforce"]
-  },
-  "c2be16df-b2busterpdfcompressed.pdf": {
-    "client": "B2Buster",
-    "industries": ["Sales & Marketing"],
-    "internal": true
+
+  "files": {
   }
 }

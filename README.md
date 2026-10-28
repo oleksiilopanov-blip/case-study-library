@@ -1,109 +1,119 @@
 # Euristiq Case Study Library
 
-Searchable library of our case-study one-pagers. Push a PDF, the site rebuilds
-itself.
+A password-protected, searchable library of Euristiq case-study one-pagers.
+Upload a PDF, and the site rebuilds itself.
 
-- **Adding a case study:** upload the PDF to [`pdfs/`](pdfs) — that's the whole job.
-- **Setup:** [SETUP.md](SETUP.md) (one time, ~15 minutes)
+- **Add a case study:** upload the PDF to [`pdfs/`](pdfs). That's the whole job.
+- **One-time setup:** [SETUP.md](SETUP.md) (about 15 minutes)
 
-Cloudflare Pages reads the PDFs on every push, extracts the titles, tags,
-outcomes and searchable text, and publishes the site. Nothing to run locally.
+**Keep this repository private.** The PDFs live in it, including the NDA ones.
+
+## What the site does
+
+- **Search** across every word in every PDF: titles, descriptions, tags,
+  outcomes and the stat boxes. Several words narrow the search (all of them
+  must match). Put a phrase in quotes to match it exactly: `"micro front end"`.
+- **Filters**: Client, Domain, Services & technology, and Location. Filters in the
+  same group widen the results (Novalume *or* Ryanair). Filters in different
+  groups narrow them (Novalume *and* Europe). Each one shows how many case
+  studies it would match.
+- **Preview** any case study. You see the page with its full text, tags, stats
+  and outcomes as real text you can select and copy. From there you can
+  **download the PDF**, **open it in a new tab**, or **copy a link** to that
+  case study.
+- Every search and filter state is in the URL, so you can share a filtered view.
 
 ## Adding a case study
 
-1. Open the [`pdfs/`](pdfs) folder here on GitHub.
-2. **Add file → Upload files**, drag the PDFs in, **Commit changes**.
-3. Wait about a minute. Cloudflare rebuilds and the library is live.
+1. Export the one-pager from Figma as a PDF **with live text**. Don't outline or
+   flatten the text, or there will be nothing to search.
+2. Name the file `client-short-title.pdf`, for example `ryanair-legacy-web-app-modernization.pdf`.
+   For NDA cases, start the name with `confidential-`.
+3. On GitHub, open [`pdfs/`](pdfs) → **Add file → Upload files** → drag the
+   PDFs in → **Commit changes**.
+4. About a minute later, Cloudflare has rebuilt the site.
 
-Export from Figma with **live text** — not flattened to an image — or there'll be
-nothing to search. If a build says `No extractable text`, that's why.
+If the client is new, add it to `clients` in [`overrides.json`](overrides.json).
+Otherwise it shows up as the first word of the filename, title-cased.
 
-## Removing one
+## What is read from the PDF
 
-Open the file in `pdfs/`, click the **⋯** menu → **Delete file** → commit. Or set
-`"hidden": true` for it in `overrides.json` to keep the file but drop it from the
-site.
+The build reads the 1920×1080 one-pager template:
 
-## Fixing a wrong title, client or industry
+| On the PDF | On the site |
+|---|---|
+| Big title | Card and preview title |
+| Paragraph under the title | Description |
+| Pill tags | **Services & technology** filter |
+| `Outcomes` → bold line + text under it | Outcomes list |
+| Stat box `Domain` or `Industry` | **Domain** filter (split on `\|`) |
+| Stat box `Location` | **Location** filter |
+| Any other stat box (`Scale`, `Delivery`, …) | Highlight on the card and in the preview |
+| Filename prefix | **Client** filter, via `overrides.json` |
 
-Everything is read off the PDF. Where it guesses wrong — the client name is
-guessed from the filename, and industries are inferred from the text — correct it
-in [`overrides.json`](overrides.json), keyed by PDF filename:
+So to fix a tag, a title or an outcome, **fix it in Figma and re-export**. The
+site will match the PDF.
+
+## overrides.json: the things a PDF can't say
+
+| Section | What it's for |
+|---|---|
+| `clients` | Filename prefix → client name. Two files with the same prefix (`novalume-…`, `octopus-…`) become one client with several cases. |
+| `tag_aliases` | Merges spelling variants so a tag never appears twice (`UI/UX design` → `UX/UI design`). |
+| `industry_aliases` | Same idea, for Domain values. |
+| `files` | Per-file corrections keyed by filename: `title`, `client`, `description`, `tags`, `industries`, `locations`, `hidden: true` (leave it off the site), `internal: true` (INTERNAL ONLY badge). |
+
+Example: give the SQL assistant case a domain and location without re-exporting:
 
 ```json
-{
-  "beeline.pdf": {
-    "client": "Beeline Professional",
-    "industries": ["HR & Workforce"],
-    "internal": true
+"files": {
+  "confidential-ai-assistant-for-sql-database-interaction.pdf": {
+    "industries": ["IT"],
+    "locations": ["Europe"]
   }
 }
 ```
 
-| Field | Effect |
-|---|---|
-| `title`, `client`, `description` | replace what was extracted |
-| `industries`, `services`, `tech`, `aws` | replace the tag lists |
-| `internal` | `true` adds an **INTERNAL ONLY** badge and a Sharing filter |
-| `hidden` | `true` leaves it out of the site entirely |
+## Removing a case study
 
-Commit the change and the site rebuilds.
+Delete the file in `pdfs/` (open it → **⋯ → Delete file** → commit). Or set
+`"hidden": true` for it under `files` in `overrides.json`.
 
 ## Who can see it
 
-The whole site — including every PDF — sits behind a password enforced by
-[`functions/_middleware.js`](functions/_middleware.js). The password itself is a
-Cloudflare environment variable called `SITE_PASSWORD`; it is **not** in this
-repo. Any username works, only the password is checked.
+The whole site, PDFs included, sits behind a password checked by
+[`functions/_middleware.js`](functions/_middleware.js). The password is the
+Cloudflare environment variable `SITE_PASSWORD`. It is **not** in this repo.
+Any username works; only the password is checked. If the variable is missing,
+the site shows a 503 error instead of serving the library unprotected.
 
-To change it: Cloudflare Pages → your project → **Settings → Environment
+To change it: Cloudflare Pages → the project → **Settings → Environment
 variables** → edit `SITE_PASSWORD` → redeploy.
-
-If the variable is missing the site returns a 503 explaining that, rather than
-serving the library unprotected.
-
-**Keep this repository private.** The PDFs live in it.
 
 ## Repository layout
 
 ```
-pdfs/                   the case studies (drop new ones here)
+pdfs/                  the case studies (drop new ones here)
+overrides.json         client names, tag spelling fixes, per-file corrections
 functions/
-  _middleware.js        the password gate
-extract.py              reads the Euristiq one-pager template out of a PDF
-build.py                generates the site into dist/
-template.html           the library UI — all CSS and JS inline
-overrides.json          your manual corrections
-requirements.txt        pure-wheel dependencies, no system packages
-_headers, robots.txt    security headers, keeps it out of search engines
+  _middleware.js       the password gate
+extract.py             reads title, tags, outcomes and stats out of each PDF
+build.py               generates the site into dist/
+template.html          the library UI (Euristiq DLS tokens, all CSS and JS inline)
+assets/                Euristiq wordmark and DLS icons, inlined at build time
+requirements.txt       pure-wheel dependencies, no system packages
+_headers, robots.txt   security headers, keeps it out of search engines
 ```
 
 ## Building it locally (optional)
 
-Never required — Cloudflare does this on every push.
+You never need to. Cloudflare builds the site on every push.
 
 ```bash
 pip install -r requirements.txt
-python3 build.py --out dist        # then open dist/index.html
-python3 build.py --embed           # one self-contained file, for email/Slack
+python3 build.py --out dist       # then open dist/index.html via a local server
+python3 build.py --embed          # one self-contained HTML file, for email/Slack
 ```
 
-## How the parsing works
-
-`extract.py` follows the one-pager template: the title is the largest font at
-the top, service tags are the size above body text split on wide gaps, and the
-Technology Stack / AWS Services / Outcomes sections are found by their headings.
-Outcome bullets are located by their marker glyphs, so bullets that wrap onto a
-second line are rejoined correctly.
-
-It also repairs three things the Figma exports introduce, each of which would
-otherwise break keyword search:
-
-- Cyrillic look-alike letters — a Cyrillic `С` in "Сompanies" never matches a
-  search for "companies"
-- words split by a stray space — `device s` → `devices`
-- words hyphenated across a line break — `cloud-` + `based` → `cloud-based`
-
-Chips naming a managed cloud service (`AWS …`, `Amazon …`, `S3`, `Lambda`, …) are
-routed to the **Cloud service** filter wherever they were printed in the deck, so
-filtering stays consistent even though the decks aren't.
+The build prints every PDF with its tag and outcome counts, and lists anything
+that **NEEDS A LOOK**, such as a missing Domain or Location stat box.

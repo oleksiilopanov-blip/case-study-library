@@ -14,10 +14,10 @@ them. After this, adding a case study is "upload a PDF to `pdfs/`".
 5. On the next screen: **uploading an existing file**.
 6. Unzip `case-study-library-repo.zip`, then drag **everything inside it** —
    not the enclosing folder — into the browser. That's `pdfs/`, `functions/`,
-   `build.py`, and the rest.
+   `assets/`, `build.py`, and the rest.
 7. **Commit changes.**
 
-You should see `pdfs/`, `functions/`, `build.py`, `extract.py`, `template.html`,
+You should see `pdfs/`, `functions/`, `assets/`, `build.py`, `extract.py`, `template.html`,
 `overrides.json`, `requirements.txt` and `README.md` at the top level of the repo.
 If they're nested inside a folder, the build won't find them — delete and re-upload
 the contents.
@@ -62,7 +62,7 @@ Now open the URL: any username, that password, and the library loads.
 
 ## 4. Check it before sharing
 
-- All 5 case studies appear.
+- All the case studies appear (the build log prints the count).
 - A **Download** link actually produces a PDF.
 - Open a PDF URL directly in a private window — e.g.
   `https://<your-url>/pdfs/anything.pdf`. **It must ask for the password.**
