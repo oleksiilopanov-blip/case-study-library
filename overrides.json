@@ -9,6 +9,8 @@
     "                 Files starting with 'confidential' are NDA cases.",
     "tag_aliases      spelling in a PDF -> spelling on the site, so one tag",
     "                 never shows up twice in the filters.",
+    "technology_tags  PDF tags that go in the Technology filter. Every other",
+    "                 tag goes in the Services filter.",
     "industry_aliases same, for the Domain / Industry values.",
     "files            per-file corrections, keyed by the PDF filename.",
     "                 Fields: title, client, description, tags, industries,",
@@ -48,6 +50,12 @@
     "Real time asset traking": "Real-time asset tracking",
     "Real time asset tracking": "Real-time asset tracking"
   },
+
+  "technology_tags": [
+    "AWS", "Azure", "IoT", "AI", "Generative AI", "Agentic AI", "Digital twin",
+    "Micro-services", "Event-driven architecture", "Multi-tenant SaaS", "Mobile",
+    "nCino & Mambu integration", "AI voice assistant"
+  ],
 
   "industry_aliases": {
     "Real estate": "Real Estate"

@@ -348,11 +348,13 @@ var $ = function(id){ return document.getElementById(id); };
 
 /* ------------------------------------------------------------ facets */
 var FACETS = [
-  {key:"client",     label:"Client",                 many:false, show:10},
-  {key:"industries", label:"Domain",                 many:true,  show:12},
-  {key:"tags",       label:"Services & technology",  many:true,  show:12},
-  {key:"locations",  label:"Location",               many:true,  show:12}
+  {key:"services",   label:"Services",    many:true,  show:12},
+  {key:"tech",       label:"Technology",  many:true,  show:13},
+  {key:"industries", label:"Domain",      many:true,  show:12},
+  {key:"client",     label:"Client",      many:false, show:10},
+  {key:"locations",  label:"Location",    many:true,  show:12}
 ];
+function tagKey(d, t){ return d.tech.indexOf(t) !== -1 ? "tech" : "services"; }
 function values(item, f){ var v = item[f.key]; return f.many ? (v || []) : (v ? [v] : []); }
 
 /* ------------------------------------------------------------ search index */
@@ -539,8 +541,8 @@ function card(d, terms){
   var stat = d.highlights[0]
     ? '<dl class="stat"><dt>' + esc(d.highlights[0].label) + '</dt><dd>' + hl(d.highlights[0].value) + '</dd></dl>' : "";
   var tags = d.tags.slice(0, 3).map(function(t){
-    var on = state.sel.tags.indexOf(t) !== -1;
-    return '<button class="tag sm" aria-pressed="' + on + '" data-f="tags" data-v="' + esc(t) + '">' + hl(t) + '</button>';
+    var k = tagKey(d, t), on = state.sel[k].indexOf(t) !== -1;
+    return '<button class="tag sm" aria-pressed="' + on + '" data-f="' + k + '" data-v="' + esc(t) + '">' + hl(t) + '</button>';
   }).join("");
   if (d.tags.length > 3) tags += '<span class="tag sm static">+' + (d.tags.length - 3) + '</span>';
   return '<li class="card" data-id="' + esc(d.id) + '">'
@@ -616,9 +618,8 @@ function openPreview(id){
     + '<h2 id="pvTitle">' + hl(d.title) + '</h2>'
     + '<p class="lead">' + hl(d.description) + '</p>'
     + (stats.length ? '<dl class="stats">' + stats.map(function(s){ return '<div class="box"><dt>' + esc(s[0]) + '</dt><dd>' + hl(s[1]) + '</dd></div>'; }).join("") + '</dl>' : "")
-    + '<h4>Services &amp; technology</h4><div class="chips">'
-    + d.tags.map(function(t){ var on = state.sel.tags.indexOf(t) !== -1; return '<button class="tag" aria-pressed="' + on + '" data-f="tags" data-v="' + esc(t) + '" data-close="1" title="Show all case studies tagged ' + esc(t) + '">' + hl(t) + '</button>'; }).join("")
-    + '</div>'
+    + tagSection("Services", "services", d.services)
+    + tagSection("Technology", "tech", d.tech)
     + (d.outcomes.length ? '<h4>Outcomes</h4><ol class="outcomes">' + d.outcomes.map(function(o){
         return '<li><span class="chip">' + icon("check") + '</span><div><strong>' + hl(o.title) + '</strong>' + (o.detail ? '<p>' + hl(o.detail) + '</p>' : "") + '</div></li>';
       }).join("") + '</ol>' : "");
@@ -630,6 +631,13 @@ function openPreview(id){
     $("pvClose").focus();
   }
   writeHash();
+}
+function tagSection(title, key, list){
+  if (!list.length) return "";
+  return '<h4>' + esc(title) + '</h4><div class="chips">' + list.map(function(t){
+    var on = state.sel[key].indexOf(t) !== -1;
+    return '<button class="tag" aria-pressed="' + on + '" data-f="' + key + '" data-v="' + esc(t) + '" data-close="1" title="Show all case studies tagged ' + esc(t) + '">' + hl(t) + '</button>';
+  }).join("") + '</div>';
 }
 function closePreview(){
   $("pv").hidden = true;

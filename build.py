@@ -75,14 +75,14 @@ OVERRIDABLE = ("title", "client", "description", "tags", "industries",
 
 def load_overrides(path):
     if not os.path.exists(path):
-        return {}, {}, {}, {}
+        return {}, {}, {}, {}, []
     with open(path, encoding="utf-8") as fh:
         ov = json.load(fh)
     files = dict(ov.get("files", {}))
     # Older format: per-file entries at the top level, keyed by filename.
     files.update({k: v for k, v in ov.items() if k.lower().endswith(".pdf")})
     return (ov.get("clients", {}), ov.get("tag_aliases", {}),
-            ov.get("industry_aliases", {}), files)
+            ov.get("industry_aliases", {}), files, ov.get("technology_tags", []))
 
 
 def alias(values, table):
@@ -124,7 +124,7 @@ def main():
     if not pdfs:
         sys.exit(f"No PDFs found in {args.src}")
 
-    clients, tag_alias, ind_alias, file_ov = load_overrides(
+    clients, tag_alias, ind_alias, file_ov, tech_tags = load_overrides(
         os.path.join(HERE, "overrides.json"))
 
     print(f"Reading {len(pdfs)} PDFs from {args.src}\n" + "-" * 72)
@@ -163,6 +163,7 @@ def main():
                 shutil.rmtree(p)      # removed case studies must not linger
             os.makedirs(p, exist_ok=True)
 
+    tech = {t.lower() for t in tech_tags}
     payload = []
     for rec in records:
         src = os.path.join(args.src, rec["file"])
@@ -174,6 +175,9 @@ def main():
             "internal": bool(rec.get("internal")),
             "description": rec.get("description", ""),
             "tags": rec.get("tags", []),
+            # PDF tags are one row of pills; overrides.json says which are tech.
+            "services": [t for t in rec.get("tags", []) if t.lower() not in tech],
+            "tech": [t for t in rec.get("tags", []) if t.lower() in tech],
             "industries": rec.get("industries", []),
             "locations": rec.get("locations", []),
             "highlights": rec.get("highlights", []),
@@ -251,7 +255,8 @@ def main():
     facets = {
         "clients": {p["client"] for p in payload},
         "industries": {v for p in payload for v in p["industries"]},
-        "tags": {v for p in payload for v in p["tags"]},
+        "services": {v for p in payload for v in p["services"]},
+        "technology": {v for p in payload for v in p["tech"]},
         "locations": {v for p in payload for v in p["locations"]},
     }
     print("  filters: " + ", ".join(f"{len(v)} {k}" for k, v in facets.items()))

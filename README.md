@@ -13,7 +13,7 @@ Upload a PDF, and the site rebuilds itself.
 - **Search** across every word in every PDF: titles, descriptions, tags,
   outcomes and the stat boxes. Several words narrow the search (all of them
   must match). Put a phrase in quotes to match it exactly: `"micro front end"`.
-- **Filters**: Client, Domain, Services & technology, and Location. Filters in the
+- **Filters**, in this order: Services, Technology, Domain, Client and Location. Filters in the
   same group widen the results (Novalume *or* Ryanair). Filters in different
   groups narrow them (Novalume *and* Europe). Each one shows how many case
   studies it would match.
@@ -44,7 +44,7 @@ The build reads the 1920×1080 one-pager template:
 |---|---|
 | Big title | Card and preview title |
 | Paragraph under the title | Description |
-| Pill tags | **Services & technology** filter |
+| Pill tags | **Technology** filter if listed in `technology_tags` in `overrides.json`, otherwise **Services** |
 | `Outcomes` → bold line + text under it | Outcomes list |
 | Stat box `Domain` or `Industry` | **Domain** filter (split on `\|`) |
 | Stat box `Location` | **Location** filter |
@@ -60,6 +60,7 @@ site will match the PDF.
 |---|---|
 | `clients` | Filename prefix → client name. Two files with the same prefix (`novalume-…`, `octopus-…`) become one client with several cases. |
 | `tag_aliases` | Merges spelling variants so a tag never appears twice (`UI/UX design` → `UX/UI design`). |
+| `technology_tags` | Which PDF tags go in the **Technology** filter. Every other tag goes in **Services**. Add a new technology tag here when a PDF introduces one. |
 | `industry_aliases` | Same idea, for Domain values. |
 | `files` | Per-file corrections keyed by filename: `title`, `client`, `description`, `tags`, `industries`, `locations`, `hidden: true` (leave it off the site), `internal: true` (INTERNAL ONLY badge). |
 
