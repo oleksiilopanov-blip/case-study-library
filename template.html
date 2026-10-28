@@ -122,6 +122,7 @@ button.tag:hover .n{color:var(--text-inverse)}
 .count{font-weight:600}
 .count span{color:var(--text-tertiary); font-weight:400}
 .active{display:flex; flex-wrap:wrap; gap:8px; flex:1}
+.active:empty{display:none}
 .active .tag{background:var(--surface-emphasis); border-color:var(--border-brand); padding-right:8px}
 .active .tag .ico{width:14px; height:14px}
 .sort{display:flex; align-items:center; gap:8px; color:var(--text-tertiary); font-size:14px; margin-left:auto}
@@ -192,6 +193,8 @@ button.tag:hover .n{color:var(--text-inverse)}
 .pv-media .frame img{width:100%; height:100%; object-fit:contain}
 .pv-media .acts{display:flex; flex-wrap:wrap; gap:16px}
 .pv-media .note{margin:0; font-size:14px; color:var(--text-tertiary)}
+.pv-mhead, .pv-foot{display:none}
+.pv-mhead h2{margin:8px 0 0; font-size:24px; line-height:32px; font-weight:800; letter-spacing:-.02em; text-wrap:balance}
 .pv-text{padding:32px; overflow:auto; user-select:text}
 .pv-text h2{text-wrap:balance; margin:8px 0 0; font-size:32px; line-height:40px; font-weight:800; letter-spacing:-.02em}
 .pv-text .lead{margin:16px 0 0; color:var(--text-secondary)}
@@ -221,7 +224,8 @@ footer.foot .container{display:flex; gap:16px; flex-wrap:wrap; justify-content:s
   .rail .apply{position:sticky; bottom:-24px; margin:24px -24px -24px; padding:16px 24px; background:var(--surface-base); border-top:1px solid var(--border-base)}
   .btn.filterbtn{display:inline-flex}
   .scrim{position:fixed; inset:0; z-index:44; background:rgba(0,0,0,.6)}
-  .pv-body{grid-template-columns:minmax(0,1fr)}
+  .pv-body{display:block; overflow:auto}
+  .pv-text{overflow:visible}
   .pv-media{border-right:0; border-bottom:1px solid var(--border-base)}
 }
 @media (min-width:1101px){ .rail .apply, .rail .close{display:none} .scrim{display:none} }
@@ -238,9 +242,19 @@ footer.foot .container{display:flex; gap:16px; flex-wrap:wrap; justify-content:s
   .sort{margin-left:0}
   .pv{padding:0}
   .pv-panel{border-radius:0; border:0; height:100%}
+  /* toolbar: Filters + count, then active filters on their own row, then sort */
+  .toolbar{display:grid; grid-template-columns:auto 1fr; gap:16px}
+  .toolbar .active, .toolbar .sort{grid-column:1 / -1}
+  /* preview: title, page, details; actions pinned to the bottom */
   .pv-media,.pv-text{padding:16px}
-  .pv-text h2{font-size:24px; line-height:32px}
-  .pv-media .acts .btn{flex:1}
+  .pv-media{gap:16px; border-bottom:0; padding-bottom:0}
+  .pv-mhead{display:block}
+  .pv-thead, .pv-media .acts{display:none}
+  .pv-text .lead{margin-top:0}
+  .pv-foot{display:flex; gap:8px; padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--border-base); background:var(--surface-base)}
+  .pv-foot .btn{flex:1; min-width:0; padding:0 12px; font-size:15px}
+  .pv-top{padding:12px 16px; gap:8px}
 }
 @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
 </style>
@@ -320,19 +334,24 @@ footer.foot .container{display:flex; gap:16px; flex-wrap:wrap; justify-content:s
       <span class="pos" id="pvPos"></span>
       <button class="iconbtn" id="pvPrev" aria-label="Previous case study"><svg class="ico"><use href="#i-caret-left"/></svg></button>
       <button class="iconbtn" id="pvNext" aria-label="Next case study"><svg class="ico"><use href="#i-caret-right"/></svg></button>
+      <button class="iconbtn" id="pvCopy" aria-label="Copy link to this case study" title="Copy link"><svg class="ico"><use href="#i-link"/></svg></button>
       <button class="iconbtn" id="pvClose" aria-label="Close preview"><svg class="ico"><use href="#i-x"/></svg></button>
     </div>
     <div class="pv-body">
       <div class="pv-media">
+        <div class="pv-mhead" id="pvMHead" aria-hidden="true"></div>
         <div class="frame"><img id="pvImg" alt=""></div>
         <div class="acts">
-          <a class="btn primary" id="pvDl" download><svg class="ico"><use href="#i-download"/></svg>Download PDF</a>
-          <a class="btn tertiary" id="pvOpen" target="_blank" rel="noopener"><svg class="ico"><use href="#i-ext"/></svg>Open in new tab</a>
-          <button class="btn secondary" id="pvCopy"><svg class="ico"><use href="#i-link"/></svg>Copy link</button>
+          <a class="btn primary" data-pv="dl" download><svg class="ico"><use href="#i-download"/></svg>Download PDF</a>
+          <a class="btn tertiary" data-pv="open" target="_blank" rel="noopener"><svg class="ico"><use href="#i-ext"/></svg>Open in new tab</a>
         </div>
         <p class="note" id="pvNote"></p>
       </div>
       <article class="pv-text" id="pvText"></article>
+    </div>
+    <div class="pv-foot">
+      <a class="btn primary" data-pv="dl" download><svg class="ico"><use href="#i-download"/></svg>Download PDF</a>
+      <a class="btn tertiary" data-pv="open" target="_blank" rel="noopener"><svg class="ico"><use href="#i-ext"/></svg>Open in new tab</a>
     </div>
   </div>
 </div>
@@ -605,8 +624,8 @@ function openPreview(id){
   $("pvImg").src = d.full || d.thumb || "";
   $("pvImg").alt = "Page preview: " + d.title;
   var href = pdfHref(d);
-  $("pvDl").href = href; $("pvDl").setAttribute("download", d.dl);
-  $("pvOpen").href = href;
+  document.querySelectorAll('[data-pv="dl"]').forEach(function(a){ a.href = href; a.setAttribute("download", d.dl); });
+  document.querySelectorAll('[data-pv="open"]').forEach(function(a){ a.href = href; });
   $("pvCopy").hidden = !!CFG.embedded;
   $("pvNote").textContent = "PDF · " + Math.max(1, Math.round(d.bytes / 1024)) + " KB · text in the PDF is selectable and searchable";
 
@@ -614,8 +633,10 @@ function openPreview(id){
   if (d.industries.length) stats.push(["Domain", d.industries.join(", ")]);
   if (d.locations.length) stats.push(["Location", d.locations.join(", ")]);
   d.highlights.forEach(function(h){ stats.push([h.label, h.value]); });
-  var html = '<p class="label">' + labelLine(d) + (d.confidential ? '<span class="sep">·</span>NDA' : "") + (d.internal ? '<span class="sep">·</span>Internal only' : "") + '</p>'
-    + '<h2 id="pvTitle">' + hl(d.title) + '</h2>'
+  var label = '<p class="label">' + labelLine(d) + (d.confidential ? '<span class="sep">·</span>NDA' : "") + (d.internal ? '<span class="sep">·</span>Internal only' : "") + '</p>';
+  $("pvMHead").innerHTML = label + '<h2>' + hl(d.title) + '</h2>';
+  var html = '<div class="pv-thead">' + label
+    + '<h2 id="pvTitle">' + hl(d.title) + '</h2></div>'
     + '<p class="lead">' + hl(d.description) + '</p>'
     + (stats.length ? '<dl class="stats">' + stats.map(function(s){ return '<div class="box"><dt>' + esc(s[0]) + '</dt><dd>' + hl(s[1]) + '</dd></div>'; }).join("") + '</dl>' : "")
     + tagSection("Services", "services", d.services)
