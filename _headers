@@ -1,6 +1,5 @@
 # Cloudflare Pages response headers.
-# Note: functions/_middleware.js also sets Cache-Control and X-Robots-Tag on
-# authenticated responses, and those win. These cover anything it doesn't.
+# Keeps the library out of search engines; share it by link only.
 /*
   X-Robots-Tag: noindex, nofollow, noarchive
   X-Content-Type-Options: nosniff

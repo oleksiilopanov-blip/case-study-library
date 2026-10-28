@@ -1,6 +1,6 @@
 # Euristiq Case Study Library
 
-A password-protected, searchable library of Euristiq case-study one-pagers.
+A searchable library of Euristiq case-study one-pagers, shared by link.
 Upload a PDF, and the site rebuilds itself.
 
 - **Add a case study:** upload the PDF to [`pdfs/`](pdfs). That's the whole job.
@@ -81,22 +81,19 @@ Delete the file in `pdfs/` (open it → **⋯ → Delete file** → commit). Or 
 
 ## Who can see it
 
-The whole site, PDFs included, sits behind a password checked by
-[`functions/_middleware.js`](functions/_middleware.js). The password is the
-Cloudflare environment variable `SITE_PASSWORD`. It is **not** in this repo.
-Any username works; only the password is checked. If the variable is missing,
-the site shows a 503 error instead of serving the library unprotected.
+Anyone who has the link. There is no password: share the URL only with the
+people who need it. Search engines are told not to index the site
+(`robots.txt` and the `X-Robots-Tag` header in `_headers`).
 
-To change it: Cloudflare Pages → the project → **Settings → Environment
-variables** → edit `SITE_PASSWORD` → redeploy.
+To put a password back later, add a Cloudflare Pages Function in
+`functions/_middleware.js` (it is in this repo's git history) and set the
+`SITE_PASSWORD` environment variable in Cloudflare.
 
 ## Repository layout
 
 ```
 pdfs/                  the case studies (drop new ones here)
 overrides.json         client names, tag spelling fixes, per-file corrections
-functions/
-  _middleware.js       the password gate
 extract.py             reads title, tags, outcomes and stats out of each PDF
 build.py               generates the site into dist/
 template.html          the library UI (Euristiq DLS tokens, all CSS and JS inline)

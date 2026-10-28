@@ -13,11 +13,11 @@ them. After this, adding a case study is "upload a PDF to `pdfs/`".
 4. **Create repository.**
 5. On the next screen: **uploading an existing file**.
 6. Unzip `case-study-library-repo.zip`, then drag **everything inside it** —
-   not the enclosing folder — into the browser. That's `pdfs/`, `functions/`,
+   not the enclosing folder — into the browser. That's `pdfs/`,
    `assets/`, `build.py`, and the rest.
 7. **Commit changes.**
 
-You should see `pdfs/`, `functions/`, `assets/`, `build.py`, `extract.py`, `template.html`,
+You should see `pdfs/`, `assets/`, `build.py`, `extract.py`, `template.html`,
 `overrides.json`, `requirements.txt` and `README.md` at the top level of the repo.
 If they're nested inside a folder, the build won't find them — delete and re-upload
 the contents.
@@ -40,37 +40,16 @@ the contents.
    PDF libraries.
 
 When it finishes you get a URL like `case-study-library-a1b.pages.dev`.
-Open it and you'll see a password prompt that nothing will satisfy yet — that's
-correct, and step 3 fixes it.
+Open it and the library loads.
 
-## 3. Set the password (3 min)
-
-1. In the Pages project → **Settings** → **Environment variables**.
-2. **Add variable**, for **Production**:
-
-   | | |
-   |---|---|
-   | Variable name | `SITE_PASSWORD` |
-   | Value | whatever the team will type |
-   | Type | **Secret** |
-
-3. Add the same variable for **Preview** too.
-4. Go to **Deployments** → **⋯** on the latest one → **Retry deployment**.
-   Environment variables only apply to builds that run after they're set.
-
-Now open the URL: any username, that password, and the library loads.
-
-## 4. Check it before sharing
+## 3. Check it before sharing
 
 - All the case studies appear (the build log prints the count).
 - A **Download** link actually produces a PDF.
-- Open a PDF URL directly in a private window — e.g.
-  `https://<your-url>/pdfs/anything.pdf`. **It must ask for the password.**
-  If a PDF loads without one, stop and check that `functions/` ended up inside
-  `dist/` (the build log prints `copied functions/ -> dist/functions`).
+- **Open in new tab** shows the PDF, and its text can be selected.
 
-That last check is the one that matters. The page being protected while the PDFs
-are wide open is exactly the failure mode worth ruling out.
+There is no password: anyone with the link can open the library and its PDFs,
+so share the URL only with the people who need it.
 
 ---
 
@@ -91,7 +70,6 @@ Open the failed deployment in Cloudflare and read the log — it names the file.
 | `No such file or directory: 'requirements.txt'` | The files were uploaded inside a folder. They must be at the repo root. |
 | `No extractable text` | That PDF was exported from Figma as a flat image. Re-export with live text. |
 | A `pip` / wheel error mentioning the Python version | Add an environment variable `PYTHON_VERSION` = `3.12` and retry. |
-| `503 This library is not configured yet` on the site | `SITE_PASSWORD` isn't set, or was set after the last build. Add it and retry the deployment. |
 
 A failed build never takes the site down — the previous deployment stays live
 until a new one succeeds.
@@ -99,5 +77,4 @@ until a new one succeeds.
 ## Optional — your own domain
 
 Pages project → **Custom domains** → add e.g. `cases.euristiq.com`, then add the
-CNAME it shows you at your DNS provider (GoDaddy, for euristiq.com). The password
-protection carries over unchanged.
+CNAME it shows you at your DNS provider (GoDaddy, for euristiq.com).
